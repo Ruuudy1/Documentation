@@ -17,7 +17,6 @@ Invoked on a runtime error or a 0-order backtest. Work top to bottom. Find the
 real cause; never hide it. Same rules for `main.py` and `main.cs`.
 
 ## 0. Never add error-hiding patterns
-
 Never introduce py`try`/`except`cs`try`/`catch` or
 py`hasattr`/`getattr`/`setattr`/`isinstance`cs`reflection`. They hide the exact
 failure. If existing code wraps the failing region in one, remove it, re-run,
@@ -26,7 +25,6 @@ expected case (such as a header line) by testing that exact condition. Adding a
 check just to make a crash or 0 trades go away is not a fix; fix the cause.
 
 ## 1. Shorten the backtest, then find the failure type
-
 Record the original py`set_start_date`/`set_end_date`cs`SetStartDate`/`SetEndDate`
 and universe, then shrink both: the smallest window that still reproduces the
 failure (runtime error: a span around the error date; 0 trades: 3 to 6 months),
@@ -38,7 +36,6 @@ Match the failure type:
 - 0 orders / flat equity -> Section 3.
 
 ## 2. Runtime exception
-
 Read the actual message and line; never guess.
 - Unknown property or method / AttributeError / "no attribute" -> Section 4.
 - KeyNotFound / "wasn't found in the DataDictionary": find WHY the key is
@@ -58,7 +55,6 @@ Read the actual message and line; never guess.
   9:00 schedule still fails, move it to `9, 31` (sizes on intraday price).
 
 ## 3. 0 trades / 0 orders
-
 Stop at the first that applies. NEVER add or tighten a check here.
 1. Selection too strict OR too loose (the usual flat equity / silent-fail
    cause).
@@ -99,7 +95,6 @@ Stop at the first that applies. NEVER add or tighten a check here.
    contracts need this.
 
 ## 4. Unknown property or method
-
 Do not find a property or method by py`hasattr`/`getattr`cs`reflection`. Find
 the real property/field name on the dataset's or type's QC docs page, then use
 it directly.
@@ -118,7 +113,6 @@ Quick rules:
 Change one access at a time, then re-run.
 
 ## 5. Checklist
-
 1. No banned pattern (Section 0).
 2. Original dates + universe recorded before shrinking.
 3. Fix targets the real exception line, not a guess.
