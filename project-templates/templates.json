@@ -795,6 +795,16 @@
 			"reference_template": "equities-static-universe",
 			"projectIdCs": 31854362,
 			"projectIdPy": 31854622
+		},
+		{
+			"folder": "equity-relative-strength-leaders",
+			"name": "Equity Relative Strength Leaders",
+			"description": "Holds the 10 S&P 500 names with the highest 90-day return relative to SPY, equal-weighted, monthly rebalance.",
+			"spec": "Universe: SPY constituents. Daily. 2022-01-01 to 2024-12-31, $200k. For each name compute 90-day return minus SPY 90-day return; pick top 10. Monthly rebalance equal-weight long. Demonstrates: relative-strength factor with benchmark, ETF universe + history per security. Edge case: drop names without full 90-day history.",
+			"tags": ["Equity", "relative-strength", "etf-universe", "history"],
+			"reference_template": "history-and-etf-universe",
+			"projectIdCs": 32733723,
+			"projectIdPy": 32733724
 		}
 	]
 }
