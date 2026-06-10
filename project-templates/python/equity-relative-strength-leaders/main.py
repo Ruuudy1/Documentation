@@ -11,8 +11,6 @@ class RelativeStrengthLeaders(QCAlgorithm):
         self.set_cash(200_000)
         self.settings.seed_initial_prices = True
         self._benchmark = Symbol.create("SPY", SecurityType.EQUITY, Market.USA)
-        self._lookback = 90
-        self._portfolio_size = 10
         self.universe_settings.resolution = Resolution.MINUTE
         # Refilter the ETF constituents monthly to match the rebalance cadence.
         self.universe_settings.schedule.on(self.date_rules.month_start("SPY"))
@@ -22,27 +20,17 @@ class RelativeStrengthLeaders(QCAlgorithm):
         self.schedule.on(self.date_rules.month_start("SPY"), self.time_rules.at(9, 0), self._rebalance)
 
     def _select_assets(self, constituents: list[ETFConstituentUniverse]) -> list[Symbol]:
-        benchmark_history = self.history(self._benchmark, self._lookback, Resolution.DAILY)
-        if benchmark_history.empty or len(benchmark_history) < 2:
+        symbols = [self._benchmark, *[constituent.symbol for constituent in constituents]]
+        history = self.history(symbols, timedelta(90), Resolution.DAILY)
+        if history.empty:
             return []
-        benchmark_prices = benchmark_history["close"]
-        benchmark_return = benchmark_prices.iloc[-1] / benchmark_prices.iloc[0] - 1
-        # Store each constituent's return relative to SPY.
-        relative_strength_by_symbol: dict[Symbol, float] = {}
-        for constituent in constituents:
-            history = self.history(constituent.symbol, self._lookback, Resolution.DAILY)
-            if history.empty or len(history) < 2:
-                continue
-            prices = history["close"]
-            total_return = prices.iloc[-1] / prices.iloc[0] - 1
-            relative_strength_by_symbol[constituent.symbol] = float(total_return - benchmark_return)
+        closes = history.close.unstack(0).dropna(axis=1)
+        if self._benchmark not in closes:
+            return []
+        relative_strength = closes.iloc[-1] / closes.iloc[0] - 1
+        relative_strength -= relative_strength[self._benchmark]
         # Select the 10 ETF constituents with the highest 90-day return relative to SPY.
-        ranked_symbols = sorted(
-            relative_strength_by_symbol,
-            key=lambda symbol: relative_strength_by_symbol[symbol],
-            reverse=True
-        )
-        return ranked_symbols[:self._portfolio_size]
+        return list(relative_strength.drop(self._benchmark).sort_values(ascending=False).index[:10])
 
     def _rebalance(self) -> None:
         selected_symbols = [symbol for symbol in self._universe.selected]

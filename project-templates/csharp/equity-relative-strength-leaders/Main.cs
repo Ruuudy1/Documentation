@@ -12,8 +12,6 @@ public class RelativeStrengthLeaders : QCAlgorithm
 {
     private Universe _universe;
     private readonly Symbol _benchmark = Symbol.Create("SPY", SecurityType.Equity, Market.USA);
-    private readonly int _lookback = 90;
-    private readonly int _portfolioSize = 10;
 
     public override void Initialize()
     {
@@ -32,27 +30,37 @@ public class RelativeStrengthLeaders : QCAlgorithm
 
     private IEnumerable<Symbol> SelectAssets(IEnumerable<ETFConstituentUniverse> constituents)
     {
-        var benchmarkHistory = History<TradeBar>(_benchmark, _lookback, Resolution.Daily).ToList();
-        if (benchmarkHistory.Count < 2)
+        var symbols = constituents.Select(constituent => constituent.Symbol).Append(_benchmark).ToList();
+        var history = History<TradeBar>(symbols, 90, Resolution.Daily).ToList();
+        if (history.Count == 0)
         {
-            return Enumerable.Empty<Symbol>();
+            return [];
         }
-        var benchmarkReturn = (double)(benchmarkHistory[^1].Close / benchmarkHistory[0].Close - 1m);
 
-        // Store each constituent's return relative to SPY.
-        var relativeStrengthBySymbol = new Dictionary<Symbol, double>();
-        foreach (var constituent in constituents)
-        {
-            var history = History<TradeBar>(constituent.Symbol, _lookback, Resolution.Daily).ToList();
-            if (history.Count < 2)
+        var returnsBySymbol = history
+            .SelectMany(bars => bars.Values)
+            .GroupBy(bar => bar.Symbol)
+            .Select(group => group.OrderBy(bar => bar.EndTime).ToList())
+            .Where(bars => bars.Count == 90)
+            .Select(bars =>
             {
-                continue;
-            }
-            var totalReturn = (double)(history[^1].Close / history[0].Close - 1m);
-            relativeStrengthBySymbol[constituent.Symbol] = totalReturn - benchmarkReturn;
+                return new
+                {
+                    bars[0].Symbol,
+                    Return = (double)(bars[^1].Close / bars[0].Close - 1m)
+                };
+            })
+            .ToDictionary(x => x.Key, x => x.Return);
+        if (!returnsBySymbol.TryGetValue(_benchmark, out var benchmarkReturn))
+        {
+            return [];
         }
         // Select the 10 ETF constituents with the highest 90-day return relative to SPY.
-        return relativeStrengthBySymbol.OrderByDescending(kvp => kvp.Value).Take(_portfolioSize).Select(kvp => kvp.Key);
+        return returnsBySymbol
+            .Where(kvp => kvp.Key != _benchmark)
+            .OrderByDescending(kvp => kvp.Value - benchmarkReturn)
+            .Take(10)
+            .Select(kvp => kvp.Key);
     }
 
     private void Rebalance()
