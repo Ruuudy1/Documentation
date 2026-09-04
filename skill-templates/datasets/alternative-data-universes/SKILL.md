@@ -13,6 +13,8 @@ description: Use when selecting a dynamic Equity universe from QuantConnect/LEAN
 - `EODHDUpcomingEarnings` — Upcoming Earnings
 - `EODHDUpcomingIPOs` — Upcoming IPOs
 - `EODHDUpcomingSplits` — Upcoming Splits
+- `FINRAShortInterestUniverse` — OTC Transparency
+- `FINRAShortSaleVolumeUniverse` — Regulation SHO
 - `QuiverCNBCsUniverse` — CNBC Trading
 - `QuiverLobbyingUniverse` — Corporate Lobbying
 - `QuiverInsiderTradingUniverse` — Insider Trading
@@ -20,3 +22,4 @@ description: Use when selecting a dynamic Equity universe from QuantConnect/LEAN
 - `QuiverGovernmentContractUniverse` — US Government Contracts
 - `SmartInsiderIntentionUniverse` — Corporate Buybacks
 - `SmartInsiderTransactionUniverse` — Corporate Buybacks
+- `USPTOPatentMaintenanceUniverse` — Patent Maintenance
