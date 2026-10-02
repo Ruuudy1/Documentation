@@ -1,0 +1,26 @@
+<p>To add US Electricity data to your algorithm, call the <code class="csharp">AddData</code><code class="python">add_data</code> method. Save a reference to the dataset <code>Symbol</code> so you can access the data later in your algorithm.</p>
+
+<div class="section-example-container">
+<pre class="python">class EIAElectricityDataAlgorithm(QCAlgorithm):
+    def initialize(self) -&gt; None:
+        self.set_start_date(2020, 6, 1)
+        self.set_end_date(2020, 9, 1)
+        self.set_cash(100000)
+
+        self._spy = self.add_equity("SPY", Resolution.DAILY).symbol
+        self._pjm = self.add_data(EIAElectricity, EIA.BalancingAuthorities.PJM, Resolution.DAILY).symbol</pre>
+<pre class="csharp">public class EIAElectricityDataAlgorithm : QCAlgorithm
+{
+    private Symbol _spy, _pjm;
+
+    public override void Initialize()
+    {
+        SetStartDate(2020, 6, 1);
+        SetEndDate(2020, 9, 1);
+        SetCash(100000);
+
+        _spy = AddEquity("SPY", Resolution.Daily).Symbol;
+        _pjm = AddData&lt;EIAElectricity&gt;(EIA.BalancingAuthorities.PJM, Resolution.Daily).Symbol;
+    }
+}</pre>
+</div>

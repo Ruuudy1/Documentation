@@ -1,0 +1,207 @@
+<p>The Fama-French Factors dataset enables you to measure and time factor exposure in your strategies. Examples include the following strategies:</p>
+
+<ul>
+    <li>Regressing strategy returns on the factors to separate alpha from factor exposure</li>
+    <li>Rotating between value and growth tilts based on recent value factor returns</li>
+    <li>Holding equity risk only when the momentum factor is trending up</li>
+</ul>
+<h4>Classic Algorithm Example</h4>
+<p>The following example algorithm buys SPY when the Fama-French momentum factor is positive. Otherwise, it holds cash.</p>
+
+<div class="section-example-container testable">
+<pre class="python">from AlgorithmImports import *
+
+class FamaFrenchFactorsAlgorithm(QCAlgorithm):
+    def initialize(self):
+        self.set_start_date(2020, 1, 1)
+        self.set_end_date(2020, 12, 31)
+        self.set_cash(100000)
+
+        self.spy = self.add_equity("SPY", Resolution.DAILY).symbol
+        self.fama_french = self.add_data(FamaFrench, "FF", Resolution.DAILY).symbol
+
+        history = self.history[FamaFrench](self.fama_french, 60, Resolution.DAILY)
+        self.debug(f"We got {len(list(history))} items from our history request")
+
+    def on_data(self, slice):
+        if not slice.contains_key(self.fama_french):
+            return
+
+        momentum = slice[self.fama_french].momentum
+        if momentum is None:
+            return
+
+        # Invest the whole portfolio in SPY while the momentum factor is positive
+        if momentum &gt; 0:
+            self.set_holdings(self.spy, 1)
+
+        # Liquidate SPY while the momentum factor is zero or negative
+        else:
+            self.liquidate(self.spy)</pre>
+<pre class="csharp">public class FamaFrenchFactorsAlgorithm : QCAlgorithm
+{
+    private Symbol _spy, _famaFrench;
+
+    public override void Initialize()
+    {
+        SetStartDate(2020, 1, 1);
+        SetEndDate(2020, 12, 31);
+        SetCash(100000);
+
+        _spy = AddEquity("SPY", Resolution.Daily).Symbol;
+        _famaFrench = AddData&lt;FamaFrench&gt;("FF", Resolution.Daily).Symbol;
+
+        var history = History&lt;FamaFrench&gt;(_famaFrench, 60, Resolution.Daily);
+        Debug($"We got {history.Count()} items from our history request");
+    }
+
+    public override void OnData(Slice slice)
+    {
+        if (!slice.ContainsKey(_famaFrench))
+        {
+            return;
+        }
+
+        var momentum = slice.Get&lt;FamaFrench&gt;(_famaFrench).Momentum;
+        if (!momentum.HasValue)
+        {
+            return;
+        }
+
+        // Invest the whole portfolio in SPY while the momentum factor is positive
+        if (momentum &gt; 0)
+        {
+            SetHoldings(_spy, 1);
+        }
+        // Liquidate SPY while the momentum factor is zero or negative
+        else
+        {
+            Liquidate(_spy);
+        }
+    }
+}</pre>
+</div>
+<h4>Framework Algorithm Example</h4>
+<p>The following example algorithm emits an up insight for SPY when the Fama-French momentum factor is positive. Otherwise, it emits a flat insight.</p>
+
+<div class="section-example-container testable">
+<pre class="python">from AlgorithmImports import *
+
+class FamaFrenchFrameworkAlgorithm(QCAlgorithm):
+
+    def initialize(self) -&gt; None:
+        self.set_start_date(2020, 1, 1)
+        self.set_end_date(2020, 12, 31)
+        self.set_cash(100000)
+
+        self.universe_settings.resolution = Resolution.DAILY
+
+        symbols = [Symbol.create("SPY", SecurityType.EQUITY, Market.USA)]
+        self.set_universe_selection(ManualUniverseSelectionModel(symbols))
+
+        self.add_alpha(FamaFrenchAlphaModel(self))
+
+        self.set_portfolio_construction(EqualWeightingPortfolioConstructionModel())
+        self.set_execution(ImmediateExecutionModel())
+
+
+class FamaFrenchAlphaModel(AlphaModel):
+
+    def __init__(self, algorithm: QCAlgorithm) -&gt; None:
+        self._tradable_symbols = []
+
+        # Add the Fama-French factors data.
+        self._fama_french = algorithm.add_data(FamaFrench, "FF", Resolution.DAILY).symbol
+
+        history = algorithm.history[FamaFrench](self._fama_french, 60, Resolution.DAILY)
+        algorithm.debug(f"We got {len(list(history))} items from our history request")
+
+    def update(self, algorithm: QCAlgorithm, data: Slice) -&gt; List[Insight]:
+        if self._fama_french not in data:
+            return []
+
+        momentum = data[self._fama_french].momentum
+        if momentum is None:
+            return []
+
+        # Emit an up insight when momentum is positive, otherwise a flat insight.
+        direction = InsightDirection.UP if momentum &gt; 0 else InsightDirection.FLAT
+        return [Insight.price(symbol, timedelta(days=7), direction) for symbol in self._tradable_symbols]
+
+    def on_securities_changed(self, algorithm: QCAlgorithm, changes: SecurityChanges) -&gt; None:
+        for security in changes.added_securities:
+            if security.symbol != self._fama_french:
+                self._tradable_symbols.append(security.symbol)
+
+        for security in changes.removed_securities:
+            if security.symbol in self._tradable_symbols:
+                self._tradable_symbols.remove(security.symbol)</pre>
+<pre class="csharp">public class FamaFrenchFrameworkAlgorithm : QCAlgorithm
+{
+    public override void Initialize()
+    {
+        SetStartDate(2020, 1, 1);
+        SetEndDate(2020, 12, 31);
+        SetCash(100000);
+
+        UniverseSettings.Resolution = Resolution.Daily;
+
+        var symbols = new[] { QuantConnect.Symbol.Create("SPY", SecurityType.Equity, Market.USA) };
+        SetUniverseSelection(new ManualUniverseSelectionModel(symbols));
+
+        AddAlpha(new FamaFrenchAlphaModel(this));
+
+        SetPortfolioConstruction(new EqualWeightingPortfolioConstructionModel());
+        SetExecution(new ImmediateExecutionModel());
+    }
+}
+
+public class FamaFrenchAlphaModel : AlphaModel
+{
+    private readonly List&lt;Symbol&gt; _tradableSymbols = new();
+    private readonly Symbol _famaFrench;
+
+    public FamaFrenchAlphaModel(QCAlgorithm algorithm)
+    {
+        // Add the Fama-French factors data.
+        _famaFrench = algorithm.AddData&lt;FamaFrench&gt;("FF", Resolution.Daily).Symbol;
+
+        var history = algorithm.History&lt;FamaFrench&gt;(_famaFrench, 60, Resolution.Daily);
+        algorithm.Debug($"We got {history.Count()} items from our history request");
+    }
+
+    public override IEnumerable&lt;Insight&gt; Update(QCAlgorithm algorithm, Slice data)
+    {
+        if (!data.ContainsKey(_famaFrench))
+        {
+            return Enumerable.Empty&lt;Insight&gt;();
+        }
+
+        var momentum = data.Get&lt;FamaFrench&gt;(_famaFrench).Momentum;
+        if (momentum == null)
+        {
+            return Enumerable.Empty&lt;Insight&gt;();
+        }
+
+        // Emit an up insight when momentum is positive, otherwise a flat insight.
+        var direction = momentum &gt; 0 ? InsightDirection.Up : InsightDirection.Flat;
+        return _tradableSymbols.Select(symbol =&gt; Insight.Price(symbol, TimeSpan.FromDays(7), direction));
+    }
+
+    public override void OnSecuritiesChanged(QCAlgorithm algorithm, SecurityChanges changes)
+    {
+        foreach (var security in changes.AddedSecurities)
+        {
+            if (security.Symbol != _famaFrench)
+            {
+                _tradableSymbols.Add(security.Symbol);
+            }
+        }
+
+        foreach (var security in changes.RemovedSecurities)
+        {
+            _tradableSymbols.Remove(security.Symbol);
+        }
+    }
+}</pre>
+</div>
