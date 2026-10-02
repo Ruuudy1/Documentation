@@ -1,0 +1,225 @@
+<p>The US Electricity dataset enables you to trade on the daily state of the US power grid. Examples include the following strategies:</p>
+
+<ul>
+    <li>Trading utility stocks when actual demand runs above the day-ahead forecast</li>
+    <li>Trading natural gas based on how much power comes from gas plants</li>
+    <li>Trading coal and gas producers as their share of generation shifts</li>
+</ul>
+<h4>Classic Algorithm Example</h4>
+<p>The following example algorithm buys SPY when PJM demand runs more than 2% above the day-ahead forecast. When demand undershoots the forecast by the same margin, it liquidates the position.</p>
+
+<div class="section-example-container testable">
+<pre class="python">from AlgorithmImports import *
+
+class EIAElectricityDataAlgorithm(QCAlgorithm):
+    def initialize(self):
+        self.set_start_date(2020, 6, 1)
+        self.set_end_date(2020, 9, 1)
+        self.set_cash(100000)
+
+        self._spy = self.add_equity("SPY", Resolution.DAILY).symbol
+        self._pjm = self.add_data(EIAElectricity, EIA.BalancingAuthorities.PJM, Resolution.DAILY).symbol
+        history = self.history(EIAElectricity, self._pjm, 60, Resolution.DAILY)
+
+        self.debug(f"We got {len(history)} items from our history request")
+
+    def on_data(self, slice):
+        if not slice.contains_key(self._pjm):
+            return
+
+        grid = slice[self._pjm]
+        if grid.demand is None or not grid.demand_forecast:
+            return
+
+        # Calculate the load surprise as a fraction of the forecast.
+        load_surprise = (grid.demand - grid.demand_forecast) / grid.demand_forecast
+
+        # Buy SPY when demand runs more than 2% above the forecast.
+        if load_surprise &gt; 0.02:
+            self.set_holdings(self._spy, 1)
+
+        # Liquidate when demand runs more than 2% below the forecast.
+        elif load_surprise &lt; -0.02:
+            self.liquidate(self._spy)</pre>
+<pre class="csharp">public class EIAElectricityDataAlgorithm : QCAlgorithm
+{
+    private Symbol _spy, _pjm;
+
+    public override void Initialize()
+    {
+        SetStartDate(2020, 6, 1);
+        SetEndDate(2020, 9, 1);
+        SetCash(100000);
+
+        _spy = AddEquity("SPY", Resolution.Daily).Symbol;
+        _pjm = AddData&lt;EIAElectricity&gt;(EIA.BalancingAuthorities.PJM, Resolution.Daily).Symbol;
+        var history = History&lt;EIAElectricity&gt;(_pjm, 60, Resolution.Daily);
+
+        Debug($"We got {history.Count()} items from our history request");
+    }
+
+    public override void OnData(Slice slice)
+    {
+        if (!slice.ContainsKey(_pjm))
+        {
+            return;
+        }
+
+        var grid = slice[_pjm];
+        if (!grid.Demand.HasValue || !grid.DemandForecast.HasValue || grid.DemandForecast == 0)
+        {
+            return;
+        }
+
+        // Calculate the load surprise as a fraction of the forecast.
+        var loadSurprise = (grid.Demand.Value - grid.DemandForecast.Value) / grid.DemandForecast.Value;
+
+        // Buy SPY when demand runs more than 2% above the forecast.
+        if (loadSurprise &gt; 0.02m)
+        {
+            SetHoldings(_spy, 1);
+        }
+
+        // Liquidate when demand runs more than 2% below the forecast.
+        else if (loadSurprise &lt; -0.02m)
+        {
+            Liquidate(_spy);
+        }
+    }
+}</pre>
+</div>
+<h4>Framework Algorithm Example</h4>
+<p>The following example algorithm emits up insights for SPY when PJM demand runs more than 2% above the day-ahead forecast. When demand runs more than 2% below the forecast, it emits down insights.</p>
+
+<div class="section-example-container testable  testable">
+<pre class="python">from AlgorithmImports import *
+
+class EIAElectricityFrameworkAlgorithm(QCAlgorithm):
+    def initialize(self):
+        self.set_start_date(2020, 6, 1)
+        self.set_end_date(2020, 9, 1)
+        self.set_cash(100000)
+
+        self.universe_settings.resolution = Resolution.DAILY
+        # Select SPY to trade.
+        symbols = [Symbol.create("SPY", SecurityType.EQUITY, Market.USA)]
+        self.set_universe_selection(ManualUniverseSelectionModel(symbols))
+        # Add a custom alpha model that emits insights from PJM grid operations.
+        self.add_alpha(EIAElectricityAlphaModel(self))
+        # Equally invest to dissipate non-systematic capital concentration risk on individual stock
+        self.set_portfolio_construction(EqualWeightingPortfolioConstructionModel())
+
+class EIAElectricityAlphaModel(AlphaModel):
+    def __init__(self, algorithm):
+        # Add the PJM grid operations data.
+        self._pjm = algorithm.add_data(EIAElectricity, EIA.BalancingAuthorities.PJM, Resolution.DAILY).symbol
+        self._tradable_symbols = []
+
+        history = algorithm.history(EIAElectricity, self._pjm, 60, Resolution.DAILY)
+        algorithm.log(f"We got {len(history)} items from our history request")
+
+    def update(self, algorithm, slice):
+        insights = []
+        if not slice.contains_key(self._pjm):
+            return insights
+
+        grid = slice[self._pjm]
+        if grid.demand is None or not grid.demand_forecast:
+            return insights
+
+        # Calculate the load surprise as a fraction of the forecast.
+        load_surprise = (grid.demand - grid.demand_forecast) / grid.demand_forecast
+
+        # Emit insights in the direction of the load surprise when it exceeds 2%.
+        if abs(load_surprise) &gt; 0.02:
+            direction = InsightDirection.UP if load_surprise &gt; 0 else InsightDirection.DOWN
+            insights = [Insight.price(symbol, timedelta(days=7), direction) for symbol in self._tradable_symbols]
+
+        return insights
+
+    def on_securities_changed(self, algorithm, changes):
+        for security in changes.added_securities:
+            if security.symbol != self._pjm:
+                self._tradable_symbols.append(security.symbol)
+        for security in changes.removed_securities:
+            if security.symbol in self._tradable_symbols:
+                self._tradable_symbols.remove(security.symbol)</pre>
+<pre class="csharp">public class EIAElectricityFrameworkAlgorithm : QCAlgorithm
+{
+    public override void Initialize()
+    {
+        SetStartDate(2020, 6, 1);
+        SetEndDate(2020, 9, 1);
+        SetCash(100000);
+
+        UniverseSettings.Resolution = Resolution.Daily;
+        // Select SPY to trade.
+        var symbols = new[] { QuantConnect.Symbol.Create("SPY", SecurityType.Equity, Market.USA) };
+        SetUniverseSelection(new ManualUniverseSelectionModel(symbols));
+        // Add a custom alpha model that emits insights from PJM grid operations.
+        AddAlpha(new EIAElectricityAlphaModel(this));
+        // Equally invest to dissipate non-systematic capital concentration risk on individual stock
+        SetPortfolioConstruction(new EqualWeightingPortfolioConstructionModel());
+    }
+}
+
+public class EIAElectricityAlphaModel : AlphaModel
+{
+    private readonly Symbol _pjm;
+    private readonly List&lt;Symbol&gt; _tradableSymbols = new();
+
+    public EIAElectricityAlphaModel(QCAlgorithm algorithm)
+    {
+        // Add the PJM grid operations data.
+        _pjm = algorithm.AddData&lt;EIAElectricity&gt;(EIA.BalancingAuthorities.PJM, Resolution.Daily).Symbol;
+
+        var history = algorithm.History&lt;EIAElectricity&gt;(_pjm, 60, Resolution.Daily);
+        algorithm.Log($"We got {history.Count()} items from our history request");
+    }
+
+    public override IEnumerable&lt;Insight&gt; Update(QCAlgorithm algorithm, Slice slice)
+    {
+        var insights = new List&lt;Insight&gt;();
+        if (!slice.ContainsKey(_pjm))
+        {
+            return insights;
+        }
+
+        var grid = slice.Get&lt;EIAElectricity&gt;(_pjm);
+        if (!grid.Demand.HasValue || !grid.DemandForecast.HasValue || grid.DemandForecast == 0)
+        {
+            return insights;
+        }
+
+        // Calculate the load surprise as a fraction of the forecast.
+        var loadSurprise = (grid.Demand.Value - grid.DemandForecast.Value) / grid.DemandForecast.Value;
+
+        // Emit insights in the direction of the load surprise when it exceeds 2%.
+        if (Math.Abs(loadSurprise) &gt; 0.02m)
+        {
+            var direction = loadSurprise &gt; 0 ? InsightDirection.Up : InsightDirection.Down;
+            foreach (var symbol in _tradableSymbols)
+            {
+                insights.Add(Insight.Price(symbol, TimeSpan.FromDays(7), direction));
+            }
+        }
+
+        return insights;
+    }
+
+    public override void OnSecuritiesChanged(QCAlgorithm algorithm, SecurityChanges changes)
+    {
+        foreach (var security in changes.AddedSecurities)
+        {
+            if (security.Symbol != _pjm)
+            {
+                _tradableSymbols.Add(security.Symbol);
+            }
+        }
+        foreach (var security in changes.RemovedSecurities)
+        {
+            _tradableSymbols.Remove(security.Symbol);
+        }
+    }
+}</pre>
+</div>

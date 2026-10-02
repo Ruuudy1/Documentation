@@ -1,0 +1,207 @@
+<p>The OTC Transparency dataset enables you to monitor short interest and off-exchange trading. Examples include the following strategies:</p>
+
+<ul>
+    <li>Finding short squeeze candidates by comparing short interest to average daily volume</li>
+    <li>Trading stocks when their short interest rises or falls sharply between reports</li>
+    <li>Spotting institutional buying or selling from changes in alternative trading system (ATS) volume</li>
+</ul>
+<h4>Classic Algorithm Example</h4>
+<p>The following example algorithm short sells AAPL when its open short interest increases. Otherwise, it buys AAPL.</p>
+
+<div class="section-example-container testable">
+<pre class="python">from AlgorithmImports import *
+
+class FINRAOtcTransparencyDataAlgorithm(QCAlgorithm):
+    def initialize(self):
+        self.set_start_date(2022, 1, 1)
+        self.set_end_date(2023, 1, 1)
+        self.set_cash(100000)
+
+        aapl = self.add_equity("AAPL", Resolution.DAILY).symbol
+        self.short_interest = self.add_data(FINRAShortInterest, aapl).symbol
+        self.weekly_summary = self.add_data(FINRAWeeklySummary, aapl).symbol
+        self.monthly_summary = self.add_data(FINRAMonthlySummary, aapl).symbol
+
+        history = self.history(FINRAShortInterest, self.short_interest, 30, Resolution.DAILY)
+        self.debug(f"We got {len(history)} items from our history request")
+
+    def on_data(self, slice):
+        # Log the monthly non-ATS share volume.
+        for symbol, point in slice.get(FINRAMonthlySummary).items():
+            self.debug(f"{symbol} non-ATS monthly shares at {slice.time}: {point.share_quantity}")
+
+        for symbol, point in slice.get(FINRAShortInterest).items():
+            if point.change is None:
+                continue
+
+            # Short sell when open short interest increases. Otherwise, buy.
+            if point.change &gt; 0:
+                self.set_holdings(symbol.underlying, -1)
+            else:
+                self.set_holdings(symbol.underlying, 1)</pre>
+<pre class="csharp">public class FINRAOtcTransparencyDataAlgorithm : QCAlgorithm
+{
+    private Symbol _shortInterest, _weeklySummary, _monthlySummary;
+
+    public override void Initialize()
+    {
+        SetStartDate(2022, 1, 1);
+        SetEndDate(2023, 1, 1);
+        SetCash(100000);
+
+        var aapl = AddEquity("AAPL", Resolution.Daily).Symbol;
+        _shortInterest = AddData&lt;FINRAShortInterest&gt;(aapl).Symbol;
+        _weeklySummary = AddData&lt;FINRAWeeklySummary&gt;(aapl).Symbol;
+        _monthlySummary = AddData&lt;FINRAMonthlySummary&gt;(aapl).Symbol;
+
+        var history = History&lt;FINRAShortInterest&gt;(_shortInterest, 30, Resolution.Daily);
+        Debug($"We got {history.Count()} items from our history request");
+    }
+
+    public override void OnData(Slice slice)
+    {
+        // Log the monthly non-ATS share volume.
+        foreach (var kvp in slice.Get&lt;FINRAMonthlySummary&gt;())
+        {
+            Debug($"{kvp.Key} non-ATS monthly shares at {slice.Time}: {kvp.Value.ShareQuantity}");
+        }
+
+        foreach (var kvp in slice.Get&lt;FINRAShortInterest&gt;())
+        {
+            var point = kvp.Value;
+            if (point.Change == null)
+            {
+                continue;
+            }
+
+            // Short sell when open short interest increases. Otherwise, buy.
+            if (point.Change &gt; 0)
+            {
+                SetHoldings(kvp.Key.Underlying, -1);
+            }
+            else
+            {
+                SetHoldings(kvp.Key.Underlying, 1);
+            }
+        }
+    }
+}</pre>
+</div>
+<h4>Framework Algorithm Example</h4>
+<p>The following example algorithm emits a down insight for AAPL when its open short interest increases. Otherwise, it emits an up insight.</p>
+
+<div class="section-example-container testable">
+<pre class="python">from AlgorithmImports import *
+
+class FINRAOtcTransparencyFrameworkAlgorithm(QCAlgorithm):
+
+    def initialize(self) -&gt; None:
+        self.set_start_date(2022, 1, 1)
+        self.set_end_date(2023, 1, 1)
+        self.set_cash(100000)
+
+        self.universe_settings.resolution = Resolution.DAILY
+
+        symbols = [Symbol.create("AAPL", SecurityType.EQUITY, Market.USA)]
+        self.set_universe_selection(ManualUniverseSelectionModel(symbols))
+
+        self.add_alpha(FINRAShortInterestAlphaModel())
+
+        self.set_portfolio_construction(EqualWeightingPortfolioConstructionModel())
+        self.set_execution(ImmediateExecutionModel())
+
+
+class FINRAShortInterestAlphaModel(AlphaModel):
+
+    def __init__(self) -&gt; None:
+        self._symbols_by_security = {}
+
+    def update(self, algorithm: QCAlgorithm, data: Slice) -&gt; List[Insight]:
+        insights = []
+        for security_symbol, short_interest_symbol in self._symbols_by_security.items():
+            if short_interest_symbol not in data:
+                continue
+            change = data[short_interest_symbol].change
+            if change is None:
+                continue
+            # Emit a down insight when short interest increases, otherwise an up insight.
+            direction = InsightDirection.DOWN if change &gt; 0 else InsightDirection.UP
+            insights.append(Insight.price(security_symbol, timedelta(days=14), direction))
+        return insights
+
+    def on_securities_changed(self, algorithm: QCAlgorithm, changes: SecurityChanges) -&gt; None:
+        for security in changes.added_securities:
+            symbol = security.symbol
+            short_interest_symbol = algorithm.add_data(FINRAShortInterest, symbol).symbol
+            self._symbols_by_security[symbol] = short_interest_symbol
+            history = algorithm.history(FINRAShortInterest, short_interest_symbol, 10, Resolution.DAILY)
+            algorithm.debug(f"Got {len(history)} historical short interest rows for {symbol}")
+        for security in changes.removed_securities:
+            short_interest_symbol = self._symbols_by_security.pop(security.symbol, None)
+            if short_interest_symbol is not None:
+                algorithm.remove_security(short_interest_symbol)</pre>
+<pre class="csharp">public class FINRAOtcTransparencyFrameworkAlgorithm : QCAlgorithm
+{
+    public override void Initialize()
+    {
+        SetStartDate(2022, 1, 1);
+        SetEndDate(2023, 1, 1);
+        SetCash(100000);
+
+        UniverseSettings.Resolution = Resolution.Daily;
+
+        var symbols = new[] { QuantConnect.Symbol.Create("AAPL", SecurityType.Equity, Market.USA) };
+        SetUniverseSelection(new ManualUniverseSelectionModel(symbols));
+
+        AddAlpha(new FINRAShortInterestAlphaModel());
+
+        SetPortfolioConstruction(new EqualWeightingPortfolioConstructionModel());
+        SetExecution(new ImmediateExecutionModel());
+    }
+}
+
+public class FINRAShortInterestAlphaModel : AlphaModel
+{
+    private readonly Dictionary&lt;Symbol, Symbol&gt; _symbolsBySecurity = new();
+
+    public override IEnumerable&lt;Insight&gt; Update(QCAlgorithm algorithm, Slice data)
+    {
+        foreach (var kvp in _symbolsBySecurity)
+        {
+            var securitySymbol = kvp.Key;
+            var shortInterestSymbol = kvp.Value;
+            if (!data.ContainsKey(shortInterestSymbol))
+            {
+                continue;
+            }
+            var change = data.Get&lt;FINRAShortInterest&gt;(shortInterestSymbol).Change;
+            if (change == null)
+            {
+                continue;
+            }
+            // Emit a down insight when short interest increases, otherwise an up insight.
+            var direction = change &gt; 0 ? InsightDirection.Down : InsightDirection.Up;
+            yield return Insight.Price(securitySymbol, TimeSpan.FromDays(14), direction);
+        }
+    }
+
+    public override void OnSecuritiesChanged(QCAlgorithm algorithm, SecurityChanges changes)
+    {
+        foreach (var security in changes.AddedSecurities)
+        {
+            var symbol = security.Symbol;
+            var shortInterestSymbol = algorithm.AddData&lt;FINRAShortInterest&gt;(symbol).Symbol;
+            _symbolsBySecurity[symbol] = shortInterestSymbol;
+            var history = algorithm.History&lt;FINRAShortInterest&gt;(shortInterestSymbol, 10, Resolution.Daily);
+            algorithm.Debug($"Got {history.Count()} historical short interest rows for {symbol}");
+        }
+        foreach (var security in changes.RemovedSecurities)
+        {
+            if (_symbolsBySecurity.Remove(security.Symbol, out var shortInterestSymbol))
+            {
+                algorithm.RemoveSecurity(shortInterestSymbol);
+            }
+        }
+    }
+}</pre>
+</div>
